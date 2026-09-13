@@ -120,4 +120,93 @@ def build_audit_report(
     return report
 
 
+def validate_report_schema(report: Dict[str, Any]) -> List[str]:
+    """
+    Validates report dictionary against the contest minimum required schema.
+    Returns a list of error strings (empty if valid).
+    """
+    errors = []
+    required_top = ["site", "audited_at", "summary", "findings"]
+    for field in required_top:
+        if field not in report:
+            errors.append(f"Missing required top-level field: '{field}'")
 
+    if "summary" in report:
+        summary = report["summary"]
+        if not isinstance(summary, dict):
+            errors.append("'summary' must be an object")
+        else:
+            for s_field in ["total_findings", "critical", "high", "medium"]:
+                if s_field not in summary:
+                    errors.append(f"Missing required summary field: '{s_field}'")
+                elif not isinstance(summary[s_field], int):
+                    errors.append(f"Summary field '{s_field}' must be an integer")
+
+    if "findings" in report:
+        findings = report["findings"]
+        if not isinstance(findings, list):
+            errors.append("'findings' must be a list")
+        else:
+            for i, f in enumerate(findings):
+                if not isinstance(f, dict):
+                    errors.append(f"Finding #{i} is not an object")
+                    continue
+                for req in ["id", "title", "severity", "evidence", "suggested_action"]:
+                    if req not in f:
+                        errors.append(f"Finding #{i} missing required field: '{req}'")
+                if "suggested_action" in f:
+                    action = f["suggested_action"]
+                    if not isinstance(action, dict):
+                        errors.append(f"Finding #{i} 'suggested_action' must be an object")
+                    else:
+                        if "summary" not in action:
+                            errors.append(f"Finding #{i} suggested_action missing 'summary'")
+                        if "priority" not in action:
+                            errors.append(f"Finding #{i} suggested_action missing 'priority'")
+
+    return errors
+
+
+def render_markdown_report(report: Dict[str, Any]) -> str:
+    """
+    Renders human-readable markdown summary for dashboards and CLI display.
+    """
+    lines = [
+        f"# AI Readiness & Engagement Audit Report: {report.get('site')}",
+        f"**Audited At:** {report.get('audited_at')}",
+        "",
+        "## Summary",
+        f"- **Total Findings:** {report['summary']['total_findings']}",
+        f"- **Critical:** {report['summary']['critical']}",
+        f"- **High:** {report['summary']['high']}",
+        f"- **Medium:** {report['summary']['medium']}",
+        f"- **Discoverability Score:** {report['summary'].get('discoverability_score', 'N/A')}/100",
+        f"- **Engagement Score:** {report['summary'].get('engagement_score', 'N/A')}/100",
+        "",
+        "## Detailed Findings",
+        ""
+    ]
+
+    for f in report.get("findings", []):
+        lines.append(f"### [{f.get('id')}] {f.get('title')} ({f.get('severity', '').upper()})")
+        lines.append(f"- **Category:** {f.get('category')}")
+        lines.append(f"- **Evidence:** {f.get('evidence')}")
+        action = f.get("suggested_action", {})
+        lines.append(f"- **Suggested Action (Priority: {action.get('priority')}):** {action.get('summary')}")
+        if action.get("details"):
+            lines.append(f"  - *Details:* {action.get('details')}")
+        if action.get("code_example"):
+            lines.append(f"  - *Example:*")
+            lines.append("```")
+            lines.append(action.get("code_example").strip())
+            lines.append("```")
+        lines.append("")
+
+    if "proactive_recommendations" in report:
+        lines.append("## Proactive Beyond-Problem Recommendations")
+        lines.append("")
+        for p in report["proactive_recommendations"]:
+            lines.append(f"- **{p.get('title')}** [Impact: {p.get('impact')}]: {p.get('recommendation')}")
+        lines.append("")
+
+    return "\n".join(lines)
