@@ -213,4 +213,74 @@ def audit_structured_data_and_entities(html: str, target_url: str) -> tuple:
             }
         })
 
-        return findings, metadata
+    # 6. Heading Hierarchy
+    h1s = soup.find_all("h1")
+    headings = [h.name.lower() for h in soup.find_all(re.compile(r"^h[1-6]$"))]
+    metadata["h1_count"] = len(h1s)
+    metadata["headings_count"] = len(headings)
+
+    if len(h1s) == 0:
+        findings.append({
+            "id": "F-DATA-HEADING-NO-H1",
+            "title": "Missing <h1> top-level heading",
+            "severity": "medium",
+            "category": "discoverability",
+            "evidence": "Page lacks an <h1> tag. AI summarizers rely on <h1> to extract the primary topic entity.",
+            "suggested_action": {
+                "summary": "Add a single, descriptive <h1> containing the brand and core product description.",
+                "priority": "medium",
+                "code_example": "<h1>Acme Cloud — Autonomous Infrastructure Management</h1>"
+            }
+        })
+    elif len(h1s) > 1:
+        findings.append({
+            "id": "F-DATA-HEADING-MULTIPLE-H1",
+            "title": "Multiple conflicting <h1> headings create semantic ambiguity",
+            "severity": "medium",
+            "category": "discoverability",
+            "evidence": f"Page contains {len(h1s)} distinct <h1> tags: {[h.get_text(strip=True)[:40] for h in h1s[:3]]}.",
+            "suggested_action": {
+                "summary": "Consolidate into a single authoritative <h1> and demote secondary headers to <h2>.",
+                "priority": "medium",
+                "details": "Multiple H1s dilute topic authority and confuse machine content extractors."
+            }
+        })
+
+    return findings, metadata
+
+
+def run_audit(target_url: str, html: str = None, session: requests.Session = None) -> dict:
+    if not html:
+        if not session:
+            session = requests.Session()
+            session.headers.update({"User-Agent": "Mozilla/5.0 (compatible; BrandAIAuditAgent/1.0; +https://agentskills.io)"})
+        resp = session.get(target_url, timeout=10)
+        html = resp.text
+
+    findings, meta = audit_structured_data_and_entities(html, target_url)
+    return {
+        "skill": "structured-data-entity-audit",
+        "findings": findings,
+        "metadata": meta
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Audit Schema.org JSON-LD, entity grounding, and non-text locked facts.")
+    parser.add_argument("--url", required=True, help="Target website URL")
+    parser.add_argument("--output", help="Optional path to output findings JSON")
+    args = parser.parse_args()
+
+    results = run_audit(args.url)
+    output_json = json.dumps(results, indent=2)
+
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(output_json)
+        print(f"Findings written to {args.output}")
+    else:
+        print(output_json)
+
+
+if __name__ == "__main__":
+    main()
