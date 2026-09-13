@@ -198,9 +198,11 @@ A full live audit of `https://adobe.com` was executed via `orchestrate.py`:
 | **Skill Structure** | ✅ Done | Each skill contains `SKILL.md`, `scripts/`, `references/` |
 | **Test Suite** | ✅ Done | 11/11 automated tests passing |
 | **`skills-ref` Compliance** | ✅ Done | Tested with `read-properties` and `to-prompt` |
-| **ZIP Structure** | ✅ Done | `marketplace.json` directly at root of `brand-ai-readiness-audit.zip` |
-| **Root Documentation** | ✅ Done | Detailed `README.md` and `imple.md` included |
+| **ZIP Structure** | ✅ Done | `marketplace.json` and `README.md` directly at root of `brand-ai-readiness-audit.zip` |
+| **ZIP File Filtering** | ✅ Verified | `imple.md`, `PROJECT_CONTEXT.md`, and `tests/` are strictly **excluded** from the ZIP |
+| **Root Documentation** | ✅ Done | Public user-facing `README.md` included at root of ZIP |
 | **Git Repository** | ✅ Done | 33 atomic semantic commits ready |
+
 
 ---
 

@@ -22,7 +22,9 @@ ZIP_OUTPUT = os.path.join(WORKSPACE_DIR, "brand-ai-readiness-audit.zip")
 INCLUDE_FILES = {"marketplace.json", "README.md"}
 INCLUDE_DIRS = {"skills"}
 
-EXCLUDE_DIRS = {"__pycache__", ".pytest_cache"}
+# Explicitly forbidden in submission archive
+FORBIDDEN_FILES = {"imple.md", "impl.md", "PROJECT_CONTEXT.md", "package_submission.py"}
+EXCLUDE_DIRS = {"__pycache__", ".pytest_cache", ".git", "tests"}
 EXCLUDE_EXTS = {".pyc", ".pyo"}
 
 
@@ -77,6 +79,9 @@ def create_submission_zip():
             "structured-data-entity-audit skill": any("structured-data-entity-audit/SKILL.md" in n for n in names),
             "content-extractability-audit skill": any("content-extractability-audit/SKILL.md" in n for n in names),
             "engagement-conversion-audit skill": any("engagement-conversion-audit/SKILL.md" in n for n in names),
+            "imple.md NOT in zip": not any("imple.md" in n.lower() for n in names),
+            "PROJECT_CONTEXT.md NOT in zip": not any("project_context.md" in n.lower() for n in names),
+            "tests/ NOT in zip": not any(n.startswith("tests/") for n in names),
         }
 
         print("\nSubmission Checklist:")
