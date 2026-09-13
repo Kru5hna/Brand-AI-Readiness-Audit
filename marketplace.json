@@ -1,0 +1,28 @@
+{
+  "name": "brand-ai-readiness-audit",
+  "version": "1.0.0",
+  "description": "Agent Skill Marketplace for auditing website AI-discoverability and on-site engagement readiness",
+  "skills": [
+    {
+      "id": "audit-orchestrator",
+      "path": "skills/audit-orchestrator",
+      "entrypoint": true
+    },
+    {
+      "id": "crawler-access-audit",
+      "path": "skills/crawler-access-audit"
+    },
+    {
+      "id": "structured-data-entity-audit",
+      "path": "skills/structured-data-entity-audit"
+    },
+    {
+      "id": "content-extractability-audit",
+      "path": "skills/content-extractability-audit"
+    },
+    {
+      "id": "engagement-conversion-audit",
+      "path": "skills/engagement-conversion-audit"
+    }
+  ]
+}
