@@ -89,4 +89,46 @@ def audit_quotability_and_density(soup: BeautifulSoup, target_url: str) -> tuple
     return findings, metadata
 
 
+def audit_freshness(soup: BeautifulSoup, html: str, current_year: int = 2026) -> list:
+    findings = []
+    # Search for copyright year in footer or body
+    copyright_matches = re.findall(r"(?:©|&copy;|copyright)\s*(?:(?:19|20)\d{2}\s*[-–—]\s*)?((?:19|20)\d{2})", html, re.I)
+    if copyright_matches:
+        years = [int(y) for y in copyright_matches if y.isdigit()]
+        if years:
+            max_year = max(years)
+            if max_year <= current_year - 2:
+                findings.append({
+                    "id": "F-CONT-STALE-COPYRIGHT",
+                    "title": "Outdated copyright date indicates unmaintained or stale content",
+                    "severity": "medium",
+                    "category": "discoverability",
+                    "evidence": f"Detected copyright year '{max_year}' in page footer (current audit year is {current_year}). AI assistants penalize stale recency signals.",
+                    "suggested_action": {
+                        "summary": f"Update footer copyright year to {current_year} or implement dynamic year injection.",
+                        "priority": "medium",
+                        "code_example": f"<p>&copy; {current_year} BrandName, Inc. All rights reserved.</p>"
+                    }
+                })
+
+    # Check for meta date tags
+    meta_mod = soup.find("meta", attrs={"property": re.compile(r"article:modified_time|og:updated_time", re.I)})
+    if not meta_mod:
+        meta_pub = soup.find("meta", attrs={"property": re.compile(r"article:published_time", re.I)})
+        if meta_pub:
+            findings.append({
+                "id": "F-CONT-MISSING-MODIFIED-TIME",
+                "title": "Article published date lacks modified_time update stamp",
+                "severity": "low",
+                "category": "discoverability",
+                "evidence": f"Found published date '{meta_pub.get('content')}' but no article:modified_time metadata.",
+                "suggested_action": {
+                    "summary": "Emit article:modified_time metadata to indicate fresh content revisions.",
+                    "priority": "low"
+                }
+            })
+
+    return findings
+
+
 
