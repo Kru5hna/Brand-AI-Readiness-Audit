@@ -99,4 +99,60 @@ def audit_structured_data_and_entities(html: str, target_url: str) -> tuple:
     parsed = urlparse(target_url)
     is_homepage = parsed.path in ["", "/", "/index.html", "/index.php"]
 
-            return findings, metadata
+    # 1. Organization / WebSite check
+    if is_homepage:
+        if not org_nodes and "WebSite" not in types_found:
+            findings.append({
+                "id": "F-DATA-MISSING-ORG-SCHEMA",
+                "title": "Missing Organization or WebSite JSON-LD structured data",
+                "severity": "high",
+                "category": "discoverability",
+                "evidence": f"Homepage {target_url} contains no Organization, Corporation, or WebSite Schema.org markup.",
+                "suggested_action": {
+                    "summary": "Add Schema.org Organization JSON-LD to establish definitive brand entity identity.",
+                    "priority": "high",
+                    "details": "Declare brand name, legal name, URL, logo, and knowledge graph sameAs identifiers.",
+                    "code_example": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Organization\",\n  \"name\": \"BrandName\",\n  \"url\": \"" + target_url + "\",\n  \"logo\": \"" + target_url + "/logo.png\"\n}"
+                }
+            })
+
+    # 2. sameAs Entity Grounding check
+    if org_nodes:
+        authoritative_sa = [
+            link for link in all_same_as
+            if any(dom in str(link).lower() for dom in AUTHORITATIVE_SAMEAS_DOMAINS)
+        ]
+        if not authoritative_sa:
+            findings.append({
+                "id": "F-DATA-ENTITY-SAMEAS-ABSENT",
+                "title": "Entity disambiguation links (sameAs) missing in schema",
+                "severity": "high",
+                "category": "discoverability",
+                "evidence": f"Found Organization schema but no authoritative 'sameAs' links to Wikidata, Wikipedia, LinkedIn, or Crunchbase.",
+                "suggested_action": {
+                    "summary": "Ground brand entity with authoritative sameAs knowledge graph links.",
+                    "priority": "high",
+                    "details": "Adding sameAs links allows LLMs to anchor the brand to established entity nodes, eliminating hallucination and namesake confusion.",
+                    "code_example": "\"sameAs\": [\n  \"https://www.wikidata.org/wiki/...\",\n  \"https://www.linkedin.com/company/...\",\n  \"https://www.crunchbase.com/organization/...\"\n]"
+                }
+            })
+
+    # 3. Product / Offer check on product pages
+    path_lower = parsed.path.lower()
+    if any(k in path_lower for k in ["product", "item", "pricing", "plan", "shop", "service", "features"]):
+        if not product_nodes:
+            findings.append({
+                "id": "F-DATA-MISSING-PRODUCT-SCHEMA",
+                "title": "Missing Product or Service JSON-LD schema on commercial page",
+                "severity": "high",
+                "category": "discoverability",
+                "evidence": f"Commercial subpage '{parsed.path}' does not declare Product, SoftwareApplication, or Service schema.",
+                "suggested_action": {
+                    "summary": "Add Product / SoftwareApplication JSON-LD with pricing and offers.",
+                    "priority": "high",
+                    "details": "Enables AI assistants to quote accurate specs, licensing tiers, and availability.",
+                    "code_example": "{\n  \"@context\": \"https://schema.org\",\n  \"@type\": \"Product\",\n  \"name\": \"Product Name\",\n  \"offers\": {\n    \"@type\": \"Offer\",\n    \"price\": \"99.00\",\n    \"priceCurrency\": \"USD\"\n  }\n}"
+                }
+            })
+
+        return findings, metadata
