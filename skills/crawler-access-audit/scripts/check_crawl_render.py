@@ -249,4 +249,54 @@ def audit_page_render_and_headers(url: str, session: requests.Session) -> tuple:
                     }
                 })
 
-                return findings, metadata
+        # Check CSR vs SSR Render Parity
+        scripts = soup.find_all("script")
+        script_weight = sum(len(s.get_text()) for s in scripts) + sum(len(s.get("src", "")) for s in scripts)
+        
+        # Strip scripts and styles to measure static body text
+        for tag in soup(["script", "style", "svg", "noscript"]):
+            tag.decompose()
+
+        body = soup.find("body")
+        body_text = body.get_text(separator=" ", strip=True) if body else ""
+        words = [w for w in body_text.split() if len(w) > 1]
+        word_count = len(words)
+        metadata["static_word_count"] = word_count
+
+        # Check for typical SPA hydration shells: <div id="root"> or <div id="app"> with minimal text
+        raw_soup = BeautifulSoup(html, "html.parser")
+        spa_mount = raw_soup.find(["div", "main"], attrs={"id": re.compile(r"^(root|app|__next)$", re.I)})
+        has_spa_mount = spa_mount is not None
+
+        if word_count < 120 and (has_spa_mount or len(scripts) >= 2):
+            findings.append({
+                "id": "F-CRAWL-CSR-HYDRATION-WALL",
+                "title": "Client-Side Rendering (CSR) Hydration Wall detected",
+                "severity": "high",
+                "category": "discoverability",
+                "evidence": f"Initial raw HTML contains only {word_count} visible words and mounts a client SPA container ({spa_mount.name if spa_mount else 'container'}), but relies on {len(scripts)} scripts. AI crawlers fetching static HTML will see an empty page shell.",
+                "suggested_action": {
+                    "summary": "Implement Server-Side Rendering (SSR) or Static Site Generation (SSG) for core landing pages.",
+                    "priority": "high",
+                    "details": "AI retrieval crawlers (e.g. ChatGPT Search, PerplexityBot) execute lightweight HTTP GET requests without JavaScript engines. Pre-render product descriptions, headers, and core facts into static HTML.",
+                    "code_example": "// In Next.js / Astro / Vite-SSR:\n// Export static page or use SSR instead of 'use client' exclusively:\nexport async function getStaticProps() { ... }"
+                }
+            })
+
+    except requests.RequestException as ex:
+        findings.append({
+            "id": "F-CRAWL-FETCH-FAIL",
+            "title": "Failed to retrieve target page",
+            "severity": "critical",
+            "category": "discoverability",
+            "evidence": f"HTTP GET {url} failed: {str(ex)}",
+            "suggested_action": {
+                "summary": "Verify website DNS, SSL certificate, and server availability.",
+                "priority": "critical"
+            }
+        })
+
+    return findings, metadata
+
+
+
