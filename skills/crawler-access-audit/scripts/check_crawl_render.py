@@ -299,4 +299,85 @@ def audit_page_render_and_headers(url: str, session: requests.Session) -> tuple:
     return findings, metadata
 
 
+def audit_sitemap_endpoint(base_url: str, session: requests.Session) -> list:
+    findings = []
+    sitemap_url = urljoin(base_url, "/sitemap.xml")
+    try:
+        resp = session.get(sitemap_url, timeout=8)
+        if resp.status_code != 200:
+            findings.append({
+                "id": "F-CRAWL-SITEMAP-MISSING",
+                "title": "Sitemap endpoint /sitemap.xml returned non-200 status",
+                "severity": "medium",
+                "category": "discoverability",
+                "evidence": f"GET {sitemap_url} returned HTTP {resp.status_code}.",
+                "suggested_action": {
+                    "summary": "Deploy an XML sitemap at /sitemap.xml listing all canonical URLs.",
+                    "priority": "medium",
+                    "details": "Ensure sitemap includes <loc>, <lastmod>, and priority directives."
+                }
+            })
+        elif "xml" not in resp.headers.get("Content-Type", "").lower() and "<urlset" not in resp.text:
+            findings.append({
+                "id": "F-CRAWL-SITEMAP-INVALID",
+                "title": "Sitemap /sitemap.xml is not valid XML",
+                "severity": "medium",
+                "category": "discoverability",
+                "evidence": f"GET {sitemap_url} returned Content-Type '{resp.headers.get('Content-Type')}' without standard <urlset> tags.",
+                "suggested_action": {
+                    "summary": "Ensure /sitemap.xml emits standard sitemap XML schema.",
+                    "priority": "medium"
+                }
+            })
+    except requests.RequestException:
+        pass
+    return findings
 
+
+def run_audit(target_url: str, session: requests.Session = None) -> dict:
+    if not session:
+        session = requests.Session()
+        session.headers.update({"User-Agent": "Mozilla/5.0 (compatible; BrandAIAuditAgent/1.0; +https://agentskills.io)"})
+
+    parsed = urlparse(target_url)
+    if not parsed.scheme:
+        target_url = f"https://{target_url}"
+        parsed = urlparse(target_url)
+
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+
+    all_findings = []
+    # 1. robots.txt
+    all_findings.extend(audit_robots_txt(base_url, session))
+    # 2. page render and headers
+    page_findings, meta = audit_page_render_and_headers(target_url, session)
+    all_findings.extend(page_findings)
+    # 3. sitemap
+    all_findings.extend(audit_sitemap_endpoint(base_url, session))
+
+    return {
+        "skill": "crawler-access-audit",
+        "findings": all_findings,
+        "metadata": meta
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Audit website crawlability, bot restrictions, and CSR render gaps.")
+    parser.add_argument("--url", required=True, help="Target website URL")
+    parser.add_argument("--output", help="Optional path to output findings JSON")
+    args = parser.parse_args()
+
+    results = run_audit(args.url)
+    output_json = json.dumps(results, indent=2)
+
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(output_json)
+        print(f"Findings written to {args.output}")
+    else:
+        print(output_json)
+
+
+if __name__ == "__main__":
+    main()
