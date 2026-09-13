@@ -172,4 +172,81 @@ def audit_robots_txt(base_url: str, session: requests.Session) -> list:
     return findings
 
 
+def audit_page_render_and_headers(url: str, session: requests.Session) -> tuple:
+    findings = []
+    metadata = {}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; GPTBot/1.0; +https://openai.com/gptbot)"
+    }
 
+    try:
+        resp = session.get(url, headers=headers, timeout=10)
+        metadata["http_status"] = resp.status_code
+        metadata["content_type"] = resp.headers.get("Content-Type", "")
+
+        # Check HTTP status
+        if resp.status_code in [403, 429, 503]:
+            findings.append({
+                "id": "F-CRAWL-WAF-CHALLENGE",
+                "title": "AI crawler User-Agent blocked or challenged by WAF",
+                "severity": "critical",
+                "category": "discoverability",
+                "evidence": f"GET {url} with GPTBot User-Agent returned HTTP {resp.status_code}. Likely blocked by Cloudflare/WAF bot management.",
+                "suggested_action": {
+                    "summary": "Create a WAF exception rule allowing verified AI search crawlers.",
+                    "priority": "critical",
+                    "details": "Configure CDN/WAF (Cloudflare, AWS WAF, Akamai) to permit verified AI bots based on their published reverse-DNS or IP ranges."
+                }
+            })
+            return findings, metadata
+
+        # Check X-Robots-Tag header
+        x_robots = resp.headers.get("X-Robots-Tag", "").lower()
+        if "noindex" in x_robots or "nosnippet" in x_robots:
+            findings.append({
+                "id": "F-CRAWL-HEADER-NOINDEX",
+                "title": "X-Robots-Tag HTTP header disallows indexing or snippets",
+                "severity": "critical",
+                "category": "discoverability",
+                "evidence": f"Server emitted 'X-Robots-Tag: {x_robots}', preventing citation generation.",
+                "suggested_action": {
+                    "summary": "Remove noindex / nosnippet directives from X-Robots-Tag on public pages.",
+                    "priority": "critical",
+                    "details": "Allow indexing and snippet extraction in response headers."
+                }
+            })
+
+        html = resp.text
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Check Meta Robots tag
+        meta_robots = soup.find("meta", attrs={"name": re.compile(r"^(robots|googlebot|bingbot)$", re.I)})
+        if meta_robots and meta_robots.get("content"):
+            content = meta_robots.get("content", "").lower()
+            if "noindex" in content:
+                findings.append({
+                    "id": "F-CRAWL-META-NOINDEX",
+                    "title": "Meta robots tag instructs crawlers not to index",
+                    "severity": "critical",
+                    "category": "discoverability",
+                    "evidence": f"Found meta tag: <meta name=\"robots\" content=\"{content}\">.",
+                    "suggested_action": {
+                        "summary": "Change meta robots content to 'index, follow'.",
+                        "priority": "critical",
+                        "code_example": '<meta name="robots" content="index, follow">'
+                    }
+                })
+            elif "nosnippet" in content:
+                findings.append({
+                    "id": "F-CRAWL-META-NOSNIPPET",
+                    "title": "Meta robots nosnippet prevents quote extraction",
+                    "severity": "high",
+                    "category": "discoverability",
+                    "evidence": f"Found meta tag: <meta name=\"robots\" content=\"{content}\">. Prevents AI engines from citing text snippets.",
+                    "suggested_action": {
+                        "summary": "Remove 'nosnippet' from meta robots directive.",
+                        "priority": "high"
+                    }
+                })
+
+                return findings, metadata
