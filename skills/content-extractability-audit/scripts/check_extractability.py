@@ -131,4 +131,80 @@ def audit_freshness(soup: BeautifulSoup, html: str, current_year: int = 2026) ->
     return findings
 
 
+def audit_llms_txt(base_url: str, session: requests.Session) -> list:
+    findings = []
+    llms_url = urljoin(base_url, "/llms.txt")
+    try:
+        resp = session.get(llms_url, timeout=6)
+        if resp.status_code != 200:
+            findings.append({
+                "id": "F-CONT-LLMSTXT-MISSING",
+                "title": "Missing /llms.txt standard file for AI assistant navigation",
+                "severity": "medium",
+                "category": "discoverability",
+                "evidence": f"GET {llms_url} returned HTTP {resp.status_code}. The site has not adopted the emerging /llms.txt standard for AI crawlers.",
+                "suggested_action": {
+                    "summary": "Deploy a curated /llms.txt markdown index at the site root.",
+                    "priority": "medium",
+                    "details": "The /llms.txt specification enables AI assistants like ChatGPT and Claude to ingest clean markdown links without parsing heavy HTML.",
+                    "code_example": "# Brand Documentation\n> One-line brand summary\n\n## Core Docs\n- [API Guide](/docs/api.md): Endpoint references\n- [Product Overview](/products.md): Feature breakdown"
+                }
+            })
+    except requests.RequestException:
+        pass
+    return findings
 
+
+def run_audit(target_url: str, html: str = None, session: requests.Session = None) -> dict:
+    if not session:
+        session = requests.Session()
+        session.headers.update({"User-Agent": "Mozilla/5.0 (compatible; BrandAIAuditAgent/1.0; +https://agentskills.io)"})
+
+    parsed = urlparse(target_url)
+    if not parsed.scheme:
+        target_url = f"https://{target_url}"
+        parsed = urlparse(target_url)
+    base_url = f"{parsed.scheme}://{parsed.netloc}"
+
+    if not html:
+        resp = session.get(target_url, timeout=10)
+        html = resp.text
+
+    soup = BeautifulSoup(html, "html.parser")
+    all_findings = []
+
+    q_findings, meta = audit_quotability_and_density(soup, target_url)
+    all_findings.extend(q_findings)
+
+    f_findings = audit_freshness(soup, html)
+    all_findings.extend(f_findings)
+
+    llms_findings = audit_llms_txt(base_url, session)
+    all_findings.extend(llms_findings)
+
+    return {
+        "skill": "content-extractability-audit",
+        "findings": all_findings,
+        "metadata": meta
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Audit AI quotability, information density, freshness, and /llms.txt.")
+    parser.add_argument("--url", required=True, help="Target website URL")
+    parser.add_argument("--output", help="Optional path to output findings JSON")
+    args = parser.parse_args()
+
+    results = run_audit(args.url)
+    output_json = json.dumps(results, indent=2)
+
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as f:
+            f.write(output_json)
+        print(f"Findings written to {args.output}")
+    else:
+        print(output_json)
+
+
+if __name__ == "__main__":
+    main()
