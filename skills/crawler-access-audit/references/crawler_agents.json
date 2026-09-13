@@ -1,0 +1,62 @@
+{
+  "ai_search_crawlers": [
+    {
+      "user_agent": "GPTBot",
+      "owner": "OpenAI",
+      "purpose": "Web crawl for ChatGPT browsing and citations"
+    },
+    {
+      "user_agent": "OAI-SearchBot",
+      "owner": "OpenAI",
+      "purpose": "Direct search indexation for ChatGPT Search"
+    },
+    {
+      "user_agent": "ClaudeBot",
+      "owner": "Anthropic",
+      "purpose": "Web browsing and citation retrieval for Claude"
+    },
+    {
+      "user_agent": "PerplexityBot",
+      "owner": "Perplexity AI",
+      "purpose": "Live citation search and synthesis"
+    },
+    {
+      "user_agent": "Google-Extended",
+      "owner": "Google",
+      "purpose": "Gemini and Vertex AI training and retrieval"
+    },
+    {
+      "user_agent": "CCBot",
+      "owner": "Common Crawl",
+      "purpose": "Open web crawl used by majority of open LLM foundations"
+    },
+    {
+      "user_agent": "Bytespider",
+      "owner": "ByteDance",
+      "purpose": "AI training and search retrieval"
+    },
+    {
+      "user_agent": "cohere-ai",
+      "owner": "Cohere",
+      "purpose": "Enterprise RAG and search models"
+    },
+    {
+      "user_agent": "Amazonbot",
+      "owner": "Amazon",
+      "purpose": "Alexa and Rufus conversational AI"
+    },
+    {
+      "user_agent": "Applebot-Extended",
+      "owner": "Apple",
+      "purpose": "Apple Intelligence web discovery"
+    }
+  ],
+  "critical_asset_patterns": [
+    "/_next/",
+    "/static/",
+    "/assets/",
+    "/api/",
+    "/*.js",
+    "/*.css"
+  ]
+}
