@@ -155,4 +155,62 @@ def audit_structured_data_and_entities(html: str, target_url: str) -> tuple:
                 }
             })
 
+    # 4. Non-Text Locked Facts: Image Alt Text Audit
+    images = soup.find_all("img")
+    missing_alt = 0
+    generic_alt = 0
+    generic_words = {"image", "img", "photo", "pic", "icon", "banner", "logo", "asset"}
+
+    for img in images:
+        src = img.get("src", "")
+        # skip tiny tracking pixels
+        if "pixel" in src or "analytics" in src:
+            continue
+        alt = img.get("alt")
+        if alt is None:
+            missing_alt += 1
+        elif not alt.strip():
+            # empty alt is acceptable only for presentation role
+            if img.get("role") != "presentation" and img.get("aria-hidden") != "true":
+                missing_alt += 1
+        else:
+            cleaned = alt.strip().lower()
+            if cleaned in generic_words or len(cleaned) < 3:
+                generic_alt += 1
+
+    metadata["total_images"] = len(images)
+    metadata["missing_alt_images"] = missing_alt
+    metadata["generic_alt_images"] = generic_alt
+
+    if missing_alt > 0 or generic_alt > 2:
+        findings.append({
+            "id": "F-DATA-NONTEXT-ALT-MISSING",
+            "title": "Facts trapped in non-text images without descriptive alt text",
+            "severity": "high" if missing_alt >= 3 else "medium",
+            "category": "discoverability",
+            "evidence": f"Found {len(images)} images; {missing_alt} missing alt text entirely and {generic_alt} with non-descriptive generic alt text (e.g. 'image', 'icon').",
+            "suggested_action": {
+                "summary": "Add descriptive, fact-rich alt attributes to all informational images and diagrams.",
+                "priority": "high" if missing_alt >= 3 else "medium",
+                "details": "AI multimodal and text scrapers extract alt attributes to understand charts, diagrams, product showcases, and workflow graphics.",
+                "code_example": '<img src="/charts/benchmark.png" alt="Benchmark chart showing 4x faster throughput compared to legacy systems">'
+            }
+        })
+
+    # 5. Canvas and Image-only Data Tables
+    canvases = soup.find_all("canvas")
+    if canvases:
+        findings.append({
+            "id": "F-DATA-CANVAS-LOCKED-CONTENT",
+            "title": "Content or data visualizer rendered inside <canvas> without text fallback",
+            "severity": "medium",
+            "category": "discoverability",
+            "evidence": f"Found {len(canvases)} <canvas> element(s). Raw canvas pixels cannot be parsed or indexed by AI crawlers without accessible DOM text.",
+            "suggested_action": {
+                "summary": "Provide an accessible HTML table or text summary adjacent to canvas visualizations.",
+                "priority": "medium",
+                "details": "Include fallback tabular data or <details> summary so AI extractors can quote data values."
+            }
+        })
+
         return findings, metadata
